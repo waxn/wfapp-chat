@@ -1,0 +1,19 @@
+/* app/globals.css – minimal dark UI */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; }
+body { background: #0f1115; color: #e5e7eb; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; }
+a { color: #8ab4ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 24px; }
+.card { background:#151922; border:1px solid #222630; border-radius:10px; padding:16px; }
+.btn { background:#5562ea; border:none; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+.btn:hover { filter: brightness(1.05); }
+.input, .password { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2a3040; background:#0f1320; color:#e5e7eb; outline:none; }
+.input::placeholder { color:#6b7280; }
+.row { display:flex; gap:12px; align-items:center; }
+.space { height:16px; }
+.spacer { height:24px; }
+.flex-col { display:flex; flex-direction:column; gap:12px; }
+.nav { display:flex; justify-content:space-between; align-items:center; padding:12px 0; }
+.tag { font-size:12px; color:#9aa3b2; }

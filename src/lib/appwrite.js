@@ -1,10 +1,10 @@
-import { Client, Account, Databases } from "appwrite";
+// lib/appwrite.ts
+import { Client, Account, Databases, ID, Query } from "appwrite";
 
 const client = new Client()
   .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT)
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID);
+  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT);
 
-const account = new Account(client);
-const databases = new Databases(client);
-
-export { client, account, databases };
+export const account = new Account(client);
+export const databases = new Databases(client);
+export { client, ID, Query };
