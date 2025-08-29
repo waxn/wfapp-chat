@@ -1,17 +1,22 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { account, databases, ID, Query, client } from "../../lib/appwrite";
+import { account, databases, ID, Query, client, storage } from "../../lib/appwrite";
 
+const BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID;
 const DB_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID;
 const MSGS_ID = process.env.NEXT_PUBLIC_APPWRITE_MESSAGES_COLLECTION_ID;
+const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
+const ENDPOINT = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
-
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -37,7 +42,9 @@ export default function ChatPage() {
         const docs = res.documents || [];
         if (!mounted) return;
         setMessages(docs.reverse()); // show oldest -> newest
-        scrollToBottom();
+        try {
+          messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+        } catch (e) {}
       } catch (e) {
         console.error("Failed to load messages:", e);
         setErr("Failed to load messages");
@@ -75,44 +82,88 @@ export default function ChatPage() {
     } catch (e) {}
   }
 
+  // ensure we scroll to bottom after messages render
+  useEffect(() => {
+    // small timeout so DOM has painted
+    const t = setTimeout(() => scrollToBottom(), 50);
+    return () => clearTimeout(t);
+  }, [messages]);
+
   // handle sending (used by Enter and the Send button)
   async function sendMessage(e) {
-    e.preventDefault();
-
+  e.preventDefault();
     if (!user) {
       setErr("You must be logged in to post.");
       return;
     }
+    if (!text.trim() && !file) return; // Prevent duplicate sends
+    if (sending) return;
 
-    const body = (text || "").trim();
-    if (!body) return;
-
+    setSending(true);
     setErr("");
+
+    const outgoingText = text.trim();
+    setText("");
+
+    let imageUrl = null;
+    let imageFileId = null;
+
     try {
-      await databases.createDocument(DB_ID, MSGS_ID, ID.unique(), {
+      if (file) {
+        // Upload file and use SDK to get a proper view URL if possible
+        let uploaded = null;
+        try {
+          uploaded = await storage.createFile(BUCKET_ID, ID.unique(), file);
+        } catch (uploadErr) {
+          console.error("Upload failed:", uploadErr);
+          throw uploadErr;
+        }
+        const fid = uploaded?.$id || uploaded?.id;
+        if (fid) {
+          imageFileId = fid; // keep if you still want raw ID
+          try {
+            imageUrl = storage.getFileView(BUCKET_ID, fid).href;
+          } catch (errView) {
+            console.error('Failed to generate imageUrl:', errView);
+          }
+        }
+
+        if (imageFileId) {
+          setFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      }
+
+      // Create the document - 👇 FIX: store imageUrl instead of imageFileId
+      const payload = {
         senderId: user.$id,
         senderName: user.name || user.email,
-        text: body,
+        text: outgoingText || "",
+        imageUrl: imageUrl || null, // Ensure this is not undefined
         createdAt: new Date().toISOString(),
-      });
-      // clear only after successful create
-      setText("");
+      };
+      console.log("Payload:", payload); // Debug: check the payload before sending
+      await databases.createDocument(DB_ID, MSGS_ID, ID.unique(), payload);
+      await databases.createDocument(DB_ID, MSGS_ID, ID.unique(), payload);
     } catch (err) {
       console.error("Send failed:", err);
-      setErr(err?.message || "Failed to send");
+      setErr(err?.message || "Failed to send message");
+      setText(outgoingText);
+    } finally {
+      setSending(false);
     }
   }
 
   return (
     <div style={{
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100vh",
-    width: "100%",
-    background: "#0b0e17"
-  }}>
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100vh",
+      width: "100%",
+      background: "#0b0e17"
+    }}>
     {/* Main chat container */}
     <div style={{
       display: "flex",
@@ -167,97 +218,95 @@ export default function ChatPage() {
           {/* Messages */}
           <div
             style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "16px",
-                background: "#1e1f26",
-                display: "flex",
-                flexDirection: "column"
+              flex: 1,
+              overflowY: "auto",
+              padding: "18px",
+              background: "#1e1f26",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
             }}
-            >
+          >
             {messages.map((m) => {
                 const isMe = user && m.senderId === user.$id;
                 return (
-                <div
+                  <div
                     key={m.$id}
                     style={{
-                    display: "flex",
-                    justifyContent: isMe ? "flex-end" : "flex-start",
-                    marginBottom: "12px"
+                      display: "flex",
+                      justifyContent: isMe ? "flex-end" : "flex-start",
+                      marginBottom: "12px"
                     }}
-                >
+                  >
                     <div
-                    style={{
-                        maxWidth: "70%",
-                        textAlign: isMe ? "right" : "left"
-                    }}
-                    >
-                    {/* Sender + timestamp */}
-                    <div
-                        style={{
-                        fontSize: "0.8rem",
-                        color: "#aaa",
-                        marginBottom: "4px"
-                        }}
-                    >
-                        {isMe ? "You" : m.senderName} •{" "}
-                        {new Date(m.createdAt || m.$createdAt).toLocaleTimeString()}
-                    </div>
-
-                    {/* Message bubble */}
-                    <div
-                        style={{
+                      style={{
                         display: "inline-block",
-                        padding: "10px 14px",
+                        padding: "12px 16px",
                         borderRadius: "12px",
                         background: isMe ? "#5865f2" : "#2c2f3f",
                         color: "#fff",
-                        wordWrap: "break-word"
-                        }}
+                        wordWrap: "break-word",
+                        maxWidth: "70%",
+                        textAlign: isMe ? "right" : "left",
+                        margin: "4px 8px"
+                      }}
                     >
-                        {m.text}
+                      <div style={{ fontSize: "0.8rem", color: "#aaa", marginBottom: "4px" }}>
+                        {isMe ? "You" : m.senderName} • {new Date(m.createdAt || m.$createdAt).toLocaleTimeString()}
+                      </div>
+                      {m.text && <div>{m.text}</div>}
+                      {m.imageUrl && (
+                        <img
+                          src={m.imageUrl}
+                          alt="uploaded"
+                          style={{ maxWidth: "200px", display: "block", marginTop: "5px" }}
+                          onError={(e) => {
+                            console.error("Failed to load image:", m.imageUrl);
+                            e.target.style.display = 'none'; // Hide broken images
+                          }}
+                        />
+                      )}
+
                     </div>
-                    </div>
-                </div>
+                  </div>
                 );
             })}
             <div ref={messagesEndRef} />
             </div>
 
-          {/* Composer */}
-          <form
-            onSubmit={sendMessage}
-            style={{
-              display: "flex",
-              padding: "12px",
-              borderTop: "1px solid #2a3040",
-              background: "#2a2d3a"
-            }}
-          >
+          {/* Composer - single bottom bar with plus icon for file upload */}
+          {/* Show file name above input bar if file is selected */}
+          {file && (
+            <div style={{ color: '#fff', margin: '8px 16px 4px', fontSize: '0.95em', textAlign: 'left' }}>
+              Selected file: {file.name}
+            </div>
+          )}
+          <form onSubmit={sendMessage} className="row" style={{ marginTop:12, alignItems: 'center', padding: '8px 16px' }}>
             <input
               className="input"
-              style={{
-                flex: 1,
-                marginRight: "8px",
-                borderRadius: "8px",
-                border: "1px solid #444",
-                padding: "10px",
-                background: "#11141d",
-                color: "#fff"
-              }}
-              placeholder="Type a message…"
+              placeholder={user ? "Type a message…" : "Login to post"}
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              disabled={!user}
+              onChange={e => setText(e.target.value)}
+              disabled={!user || sending}
+              style={{ padding: '12px 16px', borderRadius: '12px', marginRight: '12px', flex: 1, background: '#0f1116', color: '#fff', border: '1px solid #222' }}
             />
-            <button
-              className="btn"
-              type="submit"
-              style={{ background: "#5865f2", color: "#fff" }}
-              disabled={!user}
-            >
-              Send
-            </button>
+            {/* Plus icon for file upload */}
+            <label style={{ display: "flex", alignItems: "center", cursor: user ? "pointer" : "not-allowed", marginLeft: "8px" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="10" fill="#5865f2" />
+                <rect x="11" y="7" width="2" height="10" rx="1" fill="white" />
+                <rect x="7" y="11" width="10" height="2" rx="1" fill="white" />
+              </svg>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={e => setFile(e.target.files[0])}
+                disabled={!user}
+                style={{ display: "none" }}
+              />
+            </label>
+            <button className="btn" type="submit" disabled={!user || sending} style={{ padding: '10px 14px', marginLeft: '8px', background: '#5865f2', color: '#fff', borderRadius: '10px', minWidth: '72px' }}>{sending ? 'Sending...' : 'Send'}</button>
           </form>
           {err && <div style={{ color: "#ff8888", margin: "8px 12px" }}>{err}</div>}
         </>
