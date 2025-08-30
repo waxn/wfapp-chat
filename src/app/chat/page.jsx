@@ -18,6 +18,7 @@ export default function ChatPage() {
   const [file, setFile] = useState(null);
   const fileInputRef = useRef(null);
   const [user, setUser] = useState(null);
+  const textInputRef = useRef(null); // Ref for the text input
 
   useEffect(() => {
     account.get().then(setUser).catch(() => setUser(null));
@@ -150,6 +151,7 @@ export default function ChatPage() {
       setText(outgoingText);
     } finally {
       setSending(false);
+      textInputRef.current?.focus(); // Refocus the text input after sending
     }
   }
 
@@ -287,7 +289,7 @@ export default function ChatPage() {
               onChange={e => setText(e.target.value)}
               disabled={!user || sending}
               style={{ padding: '12px 16px', borderRadius: '12px', marginRight: '12px', flex: 1, background: '#0f1116', color: '#fff', border: '1px solid #222' }}
-              autoFocus
+              ref={textInputRef} // Attach ref to the input
             />
             {/* Plus icon for file upload */}
             <label style={{ display: "flex", alignItems: "center", cursor: user ? "pointer" : "not-allowed", marginLeft: "8px" }}>
