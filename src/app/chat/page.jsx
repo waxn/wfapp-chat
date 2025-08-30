@@ -144,7 +144,6 @@ export default function ChatPage() {
       };
       console.log("Payload:", payload); // Debug: check the payload before sending
       await databases.createDocument(DB_ID, MSGS_ID, ID.unique(), payload);
-      await databases.createDocument(DB_ID, MSGS_ID, ID.unique(), payload);
     } catch (err) {
       console.error("Send failed:", err);
       setErr(err?.message || "Failed to send message");
@@ -266,7 +265,6 @@ export default function ChatPage() {
                           }}
                         />
                       )}
-
                     </div>
                   </div>
                 );
@@ -289,6 +287,7 @@ export default function ChatPage() {
               onChange={e => setText(e.target.value)}
               disabled={!user || sending}
               style={{ padding: '12px 16px', borderRadius: '12px', marginRight: '12px', flex: 1, background: '#0f1116', color: '#fff', border: '1px solid #222' }}
+              autoFocus
             />
             {/* Plus icon for file upload */}
             <label style={{ display: "flex", alignItems: "center", cursor: user ? "pointer" : "not-allowed", marginLeft: "8px" }}>
